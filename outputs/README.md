@@ -1,0 +1,1 @@
+## Dados e resultados da consulta dos repositórios em arquivo .csv
