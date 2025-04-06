@@ -1,5 +1,5 @@
 query ($after: String) {
-  search(query: "stars:>1 sort:stars-desc", type: REPOSITORY, first: 20, after: $after) {
+  search(query: "stars:>1 sort:stars-desc", type: REPOSITORY, first: 10, after: $after) {
     edges {
       node {
         ... on Repository {

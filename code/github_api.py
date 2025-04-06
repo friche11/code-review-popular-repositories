@@ -15,7 +15,7 @@ def load_query(file_name):
     path = os.path.join(os.path.dirname(__file__), file_name)
     if not os.path.exists(path):
         raise FileNotFoundError(f"Arquivo '{file_name}' não encontrado em: {path}")
-    with open(path, "r") as file:
+    with open(path, "r", encoding="utf-8") as file:
         return file.read()
 
 def fetch_github_data(limit=200):
@@ -76,10 +76,9 @@ def fetch_github_data(limit=200):
     print(f"\n🏁 Busca finalizada. Total de repositórios coletados: {len(repos)}")
     return repos[:limit]
 
-
 def fetch_prs_for_repo(conn, headers, query, repo_name):
-    """Busca PRs com pelo menos 1 revisão e mais de 1h de vida"""
-    print(f"  🔍 Começando busca de PRs para {repo_name}...")  # NOVO LOG
+    """Busca PRs com pelo menos 1 revisão humana e mais de 1h de vida"""
+    print(f"  🔍 Começando busca de PRs para {repo_name}...")
     owner, name = repo_name.split("/")
     after_cursor = None
     valid_prs = []
@@ -89,7 +88,7 @@ def fetch_prs_for_repo(conn, headers, query, repo_name):
         variables = {
             "owner": owner,
             "name": name,
-            "after": after_cursor
+            "cursor": after_cursor
         }
         body = json.dumps({"query": query, "variables": variables})
         conn.request("POST", "/graphql", body=body, headers=headers)
@@ -101,10 +100,14 @@ def fetch_prs_for_repo(conn, headers, query, repo_name):
             break
 
         pr_nodes = data.get("data", {}).get("repository", {}).get("pullRequests", {}).get("nodes", [])
+        print(f"  🧪 {repo_name} → PRs brutos recebidos: {len(pr_nodes)}")
+
         for pr in pr_nodes:
-            review_count = len(pr.get("reviews", {}).get("nodes", []))
+            reviews = pr.get("reviews", {}).get("nodes", [])
+            review_count = len(reviews)
             created = pr.get("createdAt")
             closed = pr.get("closedAt") or pr.get("mergedAt")
+
             if review_count >= 1 and created and closed:
                 created_dt = datetime.strptime(created, "%Y-%m-%dT%H:%M:%SZ")
                 closed_dt = datetime.strptime(closed, "%Y-%m-%dT%H:%M:%SZ")
