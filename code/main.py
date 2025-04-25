@@ -47,7 +47,6 @@ if __name__ == "__main__":
 
                 print(f"\n🔄 Buscando PRs para {repo_name}...")
 
-                # ✅ Abre nova conexão para cada repo
                 conn = http.client.HTTPSConnection(GITHUB_API_URL)
                 prs = fetch_prs_for_repo(conn, headers, query_prs, repo_name)
                 conn.close()
@@ -56,8 +55,7 @@ if __name__ == "__main__":
                 print(f"   ✅ PRs válidos após filtro: {len(processed)}")
                 all_prs.extend(processed)
 
-                # 💤 Espera 200ms entre repositórios
-                time.sleep(0.1)
+                time.sleep(0.4)
 
             save_prs_to_csv(all_prs)
             print_summary(all_prs)

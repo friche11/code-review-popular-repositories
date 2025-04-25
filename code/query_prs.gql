@@ -10,8 +10,20 @@ query($owner: String!, $name: String!, $cursor: String) {
         createdAt
         mergedAt
         closedAt
+        additions
+        deletions
+        changedFiles
+        bodyText
+        merged
+        state
         author {
           login
+        }
+        comments {
+          totalCount
+        }
+        reviewThreads(first: 20) {
+          totalCount
         }
         reviews(first: 20) {
           nodes {

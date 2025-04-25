@@ -1,4 +1,5 @@
 from datetime import datetime
+from http.client import IncompleteRead
 import http.client
 import json
 import os
@@ -45,8 +46,24 @@ def fetch_github_data(limit=200):
         request_body = json.dumps({"query": QUERY_REPOS, "variables": variables})
 
         conn.request("POST", "/graphql", body=request_body, headers=headers)
-        response = conn.getresponse()
-        data = json.loads(response.read().decode("utf-8"))
+
+        try:
+            raw_response = conn.getresponse().read().decode("utf-8")
+        except IncompleteRead as e:
+            print("❌ Erro de leitura incompleta da resposta da API de repositórios.")
+            print(f"Detalhes: {e}")
+            break
+
+        if not raw_response:
+            print("❌ Resposta vazia recebida da API de repositórios.")
+            break
+
+        try:
+            data = json.loads(raw_response)
+        except json.JSONDecodeError as e:
+            print(f"❌ Erro ao decodificar JSON da resposta dos repositórios: {e}")
+            print(f"Resposta bruta: {raw_response}")
+            break
 
         if "errors" in data:
             print(f"❌ Erro na requisição: {data['errors']}")
@@ -91,9 +108,27 @@ def fetch_prs_for_repo(conn, headers, query, repo_name):
             "cursor": after_cursor
         }
         body = json.dumps({"query": query, "variables": variables})
-        conn.request("POST", "/graphql", body=body, headers=headers)
-        response = conn.getresponse()
-        data = json.loads(response.read().decode("utf-8"))
+
+        try:
+            conn.request("POST", "/graphql", body=body, headers=headers)
+            raw_response = conn.getresponse().read().decode("utf-8")
+        except IncompleteRead as e:
+            print(f"❌ Erro de leitura incompleta em {repo_name}: {e}")
+            return []
+        except Exception as e:
+            print(f"❌ Erro inesperado em {repo_name}: {e}")
+            return []
+
+        if not raw_response:
+            print(f"❌ Resposta vazia recebida para o repositório: {repo_name}")
+            return []
+
+        try:
+            data = json.loads(raw_response)
+        except json.JSONDecodeError as e:
+            print(f"❌ Erro ao decodificar JSON para {repo_name}: {e}")
+            print(f"Resposta bruta: {raw_response}")
+            return []
 
         if "errors" in data:
             print(f"⚠️ Erro ao buscar PRs para {repo_name}: {data['errors']}")
