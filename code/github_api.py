@@ -94,12 +94,14 @@ def fetch_github_data(limit=200):
     return repos[:limit]
 
 def fetch_prs_for_repo(conn, headers, query, repo_name):
-    """Busca PRs com pelo menos 1 revisão humana e mais de 1h de vida"""
+    """Busca até 100 PRs com pelo menos 1 revisão humana e mais de 1h de vida"""
     print(f"  🔍 Começando busca de PRs para {repo_name}...")
     owner, name = repo_name.split("/")
     after_cursor = None
     valid_prs = []
     page = 1
+
+    MAX_PRS = 100  
 
     while True:
         variables = {
@@ -149,6 +151,10 @@ def fetch_prs_for_repo(conn, headers, query, repo_name):
                 if (closed_dt - created_dt).total_seconds() >= 3600:
                     valid_prs.append(pr)
 
+            if len(valid_prs) >= MAX_PRS:
+                print(f"🚀 Limite de {MAX_PRS} PRs atingido para {repo_name}")
+                return valid_prs
+
         page_info = data.get("data", {}).get("repository", {}).get("pullRequests", {}).get("pageInfo", {})
         if not page_info.get("hasNextPage"):
             break
@@ -158,3 +164,4 @@ def fetch_prs_for_repo(conn, headers, query, repo_name):
 
     print(f"🔁 {repo_name}: {len(valid_prs)} PRs válidos encontrados")
     return valid_prs
+
