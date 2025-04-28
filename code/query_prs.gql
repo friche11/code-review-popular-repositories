@@ -1,12 +1,19 @@
 query($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
-    pullRequests(states: [MERGED, CLOSED], first: 100, after: $cursor, orderBy: {field: CREATED_AT, direction: DESC}) {
+    pullRequests(
+      states: [MERGED, CLOSED], 
+      first: 100, 
+      after: $cursor, 
+      orderBy: {field: CREATED_AT, direction: DESC}
+    ) {
       pageInfo {
         hasNextPage
         endCursor
       }
       nodes {
+        number
         title
+        state
         createdAt
         mergedAt
         closedAt
@@ -14,24 +21,23 @@ query($owner: String!, $name: String!, $cursor: String) {
         deletions
         changedFiles
         bodyText
-        merged
-        state
-        author {
-          login
-        }
-        comments {
+        reviews(first: 100) {
           totalCount
-        }
-        reviewThreads(first: 20) {
-          totalCount
-        }
-        reviews(first: 20) {
           nodes {
             author {
               login
               __typename
             }
             submittedAt
+          }
+        }
+        comments(first: 100) {
+          totalCount
+          nodes {
+            author {
+              login
+              __typename
+            }
           }
         }
       }

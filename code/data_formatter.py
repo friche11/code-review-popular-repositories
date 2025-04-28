@@ -22,31 +22,51 @@ def process_prs(repo_name, pr_list):
     processed = []
 
     for pr in pr_list:
+        if not isinstance(pr, dict):
+            continue
+
+        state = pr.get("state")
+        if state not in {"MERGED", "CLOSED"}:
+            continue
+
+        review_count = pr.get("reviews", {}).get("totalCount", 0)
+        if review_count < 1:
+            continue
+
         created = pr.get("createdAt")
         merged = pr.get("mergedAt")
         closed = pr.get("closedAt")
         end_time = merged or closed
-
-        reviews = pr.get("reviews", {}).get("nodes", [])
-        review_count = len(reviews)
-        has_human_review = any(is_human_review(r) for r in reviews)
         hours_to_review = duration_in_hours(created, end_time)
 
-        print(f"🔍 PR: {pr.get('title')[:50]} | Reviews: {review_count} | Human: {has_human_review} | Duração: {hours_to_review:.2f}h")
+        if hours_to_review is None or hours_to_review < 1:
+            continue
 
-        if not has_human_review:
-            print(f"⚠️ Ignorado (sem revisão humana): {pr.get('title')}")
-        elif hours_to_review < 1:
-            print(f"⚠️ Ignorado (tempo < 1h): {pr.get('title')} ({hours_to_review:.2f}h)")
-        else:
-            processed.append([
-                repo_name,
-                pr.get("title"),
-                created,
-                end_time,
-                hours_to_review,
-                review_count
-            ])
+        reviews = pr.get("reviews", {}).get("nodes") or []
+        comments = pr.get("comments", {}).get("nodes") or []
+
+        review_authors = {r.get('author', {}).get('login') for r in reviews
+                          if r.get('author') and r.get('author', {}).get('__typename') != 'Bot'}
+        comment_authors = {c.get('author', {}).get('login') for c in comments
+                           if c.get('author') and c.get('author', {}).get('__typename') != 'Bot'}
+        participants = len(review_authors | comment_authors)
+
+        processed.append([
+            repo_name,
+            pr.get("number", ""),
+            pr.get("title", ""),
+            state,
+            created,
+            end_time,
+            hours_to_review,
+            pr.get("changedFiles", 0),
+            pr.get("additions", 0),
+            pr.get("deletions", 0),
+            len(pr.get("bodyText") or ""),
+            pr.get("comments", {}).get("totalCount", 0),
+            review_count,
+            participants
+        ])
 
     return processed
 
@@ -66,19 +86,61 @@ def save_to_csv(repos):
             ])
     print(f"\n✅ Repositórios salvos em: {OUTPUT_FILE}")
 
-def save_prs_to_csv(prs):
-    with open(OUTPUT_PRS_FILE, "w", newline="", encoding="utf-8") as file:
+def save_prs_to_csv(prs, file_path=OUTPUT_PRS_FILE, append=False):
+    mode = 'a' if append else 'w'
+    fieldnames = [
+        "Repositório", "Número", "Título do PR", "Estado", "Criado em", "Finalizado em",
+        "Duração (h)", "Arquivos Modificados", "Linhas Adicionadas", "Linhas Removidas",
+        "Tamanho Descrição", "Comentários", "Revisões", "Participantes"
+    ]
+    
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+    with open(file_path, mode, newline='', encoding='utf-8') as file:
         writer = csv.writer(file, delimiter=";", quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(["Repositório", "Título do PR", "Criado em", "Finalizado em", "Duração (h)", "Qtd Reviews"])
+        if not append or not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            writer.writerow(fieldnames)
         for pr in prs:
             writer.writerow(pr)
-    print(f"\n✅ PRs válidos salvos em: {OUTPUT_PRS_FILE}")
+    print(f"\n✅ PRs válidos salvos em: {file_path}")
+
+def load_repos_from_csv(file_path=OUTPUT_FILE):
+    """Carrega repositórios do CSV."""
+    repos = []
+    if not os.path.exists(file_path):
+        print(f"❌ Arquivo {file_path} não encontrado.")
+        return repos
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f, delimiter=';')
+            header = next(reader, None)  # Pular cabeçalho
+            if not header or len(header) < 6:
+                print(f"❌ Cabeçalho inválido em {file_path}.")
+                return repos
+            for row in reader:
+                if len(row) < 6 or not row[1]:  # Verificar nameWithOwner
+                    print(f"⚠️ Linha inválida ignorada: {row}")
+                    continue
+                repos.append({
+                    'name': row[0],
+                    'nameWithOwner': row[1],
+                    'createdAt': row[2],
+                    'updatedAt': row[3],
+                    'primaryLanguage': {'name': row[4] if row[4] != 'N/A' else None},
+                    'totalPRs': int(row[5]) if row[5].isdigit() else 0
+                })
+        print(f"📂 Carregados {len(repos)} repositórios de {file_path}")
+    except Exception as e:
+        print(f"❌ Erro ao ler {file_path}: {e}")
+    return repos
 
 def print_summary(prs):
     print("\n Pull Requests Filtrados \n")
     print(tabulate(
         prs,
-        headers=["Repositório", "Título do PR", "Criado em", "Finalizado em", "Duração (h)", "Qtd Reviews"],
+        headers=["Repositório", "Número", "Título do PR", "Estado", "Criado em", "Finalizado em",
+                 "Duração (h)", "Arquivos Modificados", "Linhas Adicionadas", "Linhas Removidas",
+                 "Tamanho Descrição", "Comentários", "Revisões", "Participantes"],
         tablefmt="fancy_grid",
         numalign="right"
     ))
